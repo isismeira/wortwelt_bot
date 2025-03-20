@@ -2,6 +2,7 @@ import os
 import requests
 import time
 import json
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 # Carregando as variáveis do .env
@@ -17,9 +18,23 @@ IMAGENS = {
     "zurique": "imagens/zurique.jpg"
 }
 
+AGENDAMENTOS_FILE = "agendamentos.json"
+
+def carregar_agendamentos():
+    if os.path.exists(AGENDAMENTOS_FILE):
+        with open(AGENDAMENTOS_FILE, "r") as file:
+            return json.load(file)
+    return {}
+
+def salvar_agendamentos(agendamentos):
+    with open(AGENDAMENTOS_FILE, "w") as file:
+        json.dump(agendamentos, file, indent=4)
+
 class TelegramBot:
     def __init__(self):
         self.url_base = f'https://api.telegram.org/bot{TOKEN}/'
+        self.agendamentos = carregar_agendamentos()
+        self.passos_agendamento = {}  # Guarda o progresso do usuário
 
     def Iniciar(self):
         update_id = None
@@ -38,7 +53,7 @@ class TelegramBot:
                         texto_mensagem = mensagem['message']['text']
                         eh_primeira_mensagem = mensagem['message']['message_id'] == 1
 
-                        resposta, botoes, imagem = self.criar_resposta(texto_mensagem, eh_primeira_mensagem)
+                        resposta, botoes, imagem = self.criar_resposta(texto_mensagem, eh_primeira_mensagem, chat_id)
                         self.responder(resposta, chat_id, botoes, imagem)
 
                     elif "callback_query" in mensagem:  
@@ -60,9 +75,12 @@ class TelegramBot:
             print(f"Erro na requisição: {e}")
             return {}
 
-    def criar_resposta(self, mensagem, eh_primeira_mensagem):
+    def criar_resposta(self, mensagem, eh_primeira_mensagem, chat_id):
         botoes = None
         imagem = None  
+
+        if chat_id in self.passos_agendamento:
+            return self.processar_agendamento(chat_id, mensagem)
 
         if eh_primeira_mensagem or mensagem.lower() == 'voltar':
             return f'''Olá 👋 , bem-vindo(a) ao atendimento da <b>Escola de Alemão WortWelt</b>! 
@@ -149,7 +167,7 @@ A Suíça é o destino perfeito para quem busca um aprendizado imersivo e uma qu
 ✅ Passe gratuito para transporte público durante toda a estadia
 ✅ Visitas culturais ao Lago de Zurique, ao Museu Nacional Suíço e ao bairro medieval Niederdorf''', botoes, IMAGENS["zurique"]
 
-        if mensagem == '4' or mensagem.lower()=='agendamento':
+        if mensagem == '4' or mensagem.lower() == 'agendamento':
             resposta = '''Você pode agendar uma aula experimental ou seu teste de nivelamento e atendimentos personalizados pelo nosso site ou WhatsApp.  
 Escolha uma das opções abaixo:'''
 
@@ -168,23 +186,45 @@ Escolha uma das opções abaixo:'''
         chat_id = callback_query["message"]["chat"]["id"]
         dados = callback_query["data"]
 
-        if dados == "agendar_aula":
-            self.responder("Ótimo! Para agendar uma aula, acesse nosso site ou envie uma mensagem.", chat_id)
-        elif dados == "teste_nivelamento":
-            self.responder("Podemos agendar seu teste de nivelamento. Entre em contato conosco!", chat_id)
+        if dados in ["agendar_aula", "teste_nivelamento"]:
+            self.passos_agendamento[chat_id] = {"passo": 1, "tipo": dados}
+            self.responder("Ótimo! Digite a data desejada no formato DD/MM/AAAA.", chat_id)
+
+    def processar_agendamento(self, chat_id, mensagem):
+        dados_agendamento = self.passos_agendamento[chat_id]
+        passo = dados_agendamento["passo"]
+
+        if passo == 1:
+            try:
+                data = datetime.strptime(mensagem, "%d/%m/%Y").date()
+                self.passos_agendamento[chat_id]["data"] = str(data)
+                self.passos_agendamento[chat_id]["passo"] = 2
+                return "Agora, digite o horário desejado no formato HH:MM.", None, None
+            except ValueError:
+                return "Formato de data inválido! Use DD/MM/AAAA.", None, None
+
+        elif passo == 2:
+            try:
+                hora = datetime.strptime(mensagem, "%H:%M").time()
+                self.passos_agendamento[chat_id]["hora"] = str(hora)
+                tipo = "Aula Experimental" if self.passos_agendamento[chat_id]["tipo"] == "agendar_aula" else "Teste de Nivelamento"
+                
+                if chat_id not in self.agendamentos:
+                    self.agendamentos[chat_id] = []
+                
+                self.agendamentos[chat_id].append({"tipo": tipo, "data": self.passos_agendamento[chat_id]["data"], "hora": str(hora)})
+                salvar_agendamentos(self.agendamentos)
+                
+                del self.passos_agendamento[chat_id]
+                return f"Seu {tipo} foi agendado para {self.agendamentos[chat_id][-1]['data']} às {self.agendamentos[chat_id][-1]['hora']}!", None, None
+            except ValueError:
+                return "Formato de hora inválido! Use HH:MM.", None, None           
 
     def responder(self, resposta, chat_id, botoes=None, imagem=None):
-        link_de_envio = f"{self.url_base}sendMessage"
-        params = {
-            "chat_id": chat_id,
-            "text": resposta,
-            "parse_mode": "HTML",
-        }
-
+        params = {"chat_id": chat_id, "text": resposta, "parse_mode": "HTML"}
         if botoes:
             params["reply_markup"] = json.dumps(botoes)
-
-        requests.get(link_de_envio, params=params)
+        requests.get(f"{self.url_base}sendMessage", params=params)
 
         if imagem:
             with open(imagem, 'rb') as foto:
