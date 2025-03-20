@@ -24,7 +24,7 @@ def carregar_agendamentos():
     if os.path.exists(AGENDAMENTOS_FILE):
         with open(AGENDAMENTOS_FILE, "r") as file:
             return json.load(file)
-    return {}
+    return []
 
 def salvar_agendamentos(agendamentos):
     with open(AGENDAMENTOS_FILE, "w") as file:
@@ -206,35 +206,42 @@ Escolha uma das opções abaixo:'''
         elif passo == 2:
             try:
                 hora = datetime.strptime(mensagem, "%H:%M").time()
+                data = self.passos_agendamento[chat_id]["data"]
+
+                # Verificar se o horário já está ocupado
+                for agendamento in self.agendamentos:
+                    if agendamento["data"] == data and agendamento["hora"] == str(hora):
+                        return f"Desculpe, o horário {hora} do dia {data} já está ocupado. Escolha outro horário.", None, None
+
                 self.passos_agendamento[chat_id]["hora"] = str(hora)
                 self.passos_agendamento[chat_id]["passo"] = 3
-                return "Por favor, digite seu nome completo.", None, None
+                return "Ótimo! Agora, digite seu nome completo para confirmar o agendamento.", None, None
             except ValueError:
                 return "Formato de hora inválido! Use HH:MM.", None, None
 
         elif passo == 3:
             self.passos_agendamento[chat_id]["nome"] = mensagem
             self.passos_agendamento[chat_id]["passo"] = 4
-            return "Agora, envie seu número de telefone com DDD (ex: +55 11 91234-5678).", None, None
+            return "Por fim, envie seu número de telefone.", None, None
 
         elif passo == 4:
             self.passos_agendamento[chat_id]["numero"] = mensagem
             tipo = "Aula Experimental" if self.passos_agendamento[chat_id]["tipo"] == "agendar_aula" else "Teste de Nivelamento"
 
-            if chat_id not in self.agendamentos:
-                self.agendamentos[chat_id] = []
-
-            self.agendamentos[chat_id].append({
+            # Adiciona o novo agendamento na lista global
+            novo_agendamento = {
                 "tipo": tipo,
                 "data": self.passos_agendamento[chat_id]["data"],
                 "hora": self.passos_agendamento[chat_id]["hora"],
                 "nome": self.passos_agendamento[chat_id]["nome"],
                 "numero": self.passos_agendamento[chat_id]["numero"]
-            })
+            }
+            self.agendamentos.append(novo_agendamento)
             salvar_agendamentos(self.agendamentos)
-            
+
             del self.passos_agendamento[chat_id]
-            return f"Seu {tipo} foi agendado para {self.agendamentos[chat_id][-1]['data']} às {self.agendamentos[chat_id][-1]['hora']}!\nNome: {self.agendamentos[chat_id][-1]['nome']}\nNúmero: {self.agendamentos[chat_id][-1]['numero']}", None, None          
+            return f"Seu {tipo} foi agendado para {novo_agendamento['data']} às {novo_agendamento['hora']}!", None, None
+       
 
     def responder(self, resposta, chat_id, botoes=None, imagem=None):
         params = {"chat_id": chat_id, "text": resposta, "parse_mode": "HTML"}
