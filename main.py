@@ -2,7 +2,7 @@ import os
 import requests
 import time
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Carregando as variáveis do .env
@@ -20,6 +20,7 @@ IMAGENS = {
 
 AGENDAMENTOS_FILE = "agendamentos.json"
 
+# Funções para carregar e salvar os agendamentos salvos no arquivo .json
 def carregar_agendamentos():
     if os.path.exists(AGENDAMENTOS_FILE):
         with open(AGENDAMENTOS_FILE, "r") as file:
@@ -31,11 +32,13 @@ def salvar_agendamentos(agendamentos):
         json.dump(agendamentos, file, indent=4)
 
 class TelegramBot:
+    # Inicializando a classe
     def __init__(self):
         self.url_base = f'https://api.telegram.org/bot{TOKEN}/'
         self.agendamentos = carregar_agendamentos()
-        self.passos_agendamento = {}  # Guarda o progresso do usuário
+        self.passos_agendamento = {}  # Guarda o progresso do usuário durante o agendamento
 
+    # Inicializando o robô
     def Iniciar(self):
         update_id = None
         while True:
@@ -63,6 +66,7 @@ class TelegramBot:
 
             time.sleep(1)
 
+    # Obtendo as mensagens através de requisição
     def obter_mensagens(self, update_id):
         link_requisicao = f'{self.url_base}getUpdates?timeout=100'
         if update_id:
@@ -75,6 +79,7 @@ class TelegramBot:
             print(f"Erro na requisição: {e}")
             return {}
 
+    # Formulando uma resposta
     def criar_resposta(self, mensagem, eh_primeira_mensagem, chat_id):
         botoes = None
         imagem = None  
@@ -82,7 +87,7 @@ class TelegramBot:
         if chat_id in self.passos_agendamento:
             return self.processar_agendamento(chat_id, mensagem)
 
-        if eh_primeira_mensagem or mensagem.lower() == 'voltar':
+        if eh_primeira_mensagem or mensagem.lower() == 'voltar': # "Menu" principal, mostra ao usuários as informações que ele pode acessar
             return f'''Olá 👋 , bem-vindo(a) ao atendimento da <b>Escola de Alemão WortWelt</b>! 
 Digite o número da informação que gostaria de obter:{os.linesep}
 1 - Turmas e nivelamento 👥{os.linesep}
@@ -90,7 +95,7 @@ Digite o número da informação que gostaria de obter:{os.linesep}
 3 - Programa de intercâmbio ✈️{os.linesep}
 4 - Agendamentos 📆''', botoes, imagem
 
-        if mensagem == '1':
+        if mensagem == '1': # Informações sobre turmas
             return f'''Temos turmas para <em>iniciantes, intermediários e avançados</em>. Também oferecemos <em>aulas individuais</em> em horários personalizados. Para saber seu nível, realizamos um <em>nivelamento gratuito</em>. {os.linesep}
 - Digite <b>'turmas'</b> para a consultar as turmas e seus horários. 👥{os.linesep}
 - Digite <b>'individual'</b> para saber mais sobre as aulas particulares. 👤{os.linesep}
@@ -107,7 +112,7 @@ Gostaria de consultar nossos <em>preços</em>? Digite <b>'preços'</b>💲''', b
             return f'''Para nivelar nossos futuros alunos na categoria correta, temos uma prova de nivelamento, que consiste em uma <em>prova objetiva</em> e um <em>teste de conversação</em> com um de nossos professores.{os.linesep}
 Gostaria de <em>agendar</em> um teste de nivelamento? Digite <b>'agendamento'</b> 🕑''', botoes, None
 
-        if mensagem == '2':
+        if mensagem == '2': # Informações sobre preços
             return f'''Nossos cursos variam de acordo com a carga horária e modalidade. Oferecemos algumas <em>bolsas</em> e <em>descontos</em>.{os.linesep}
 - Digite <b>'preços'</b> para receber uma tabela com os preços referentes a cada curso. 💵{os.linesep}
 - Digite <b>'descontos'</b> para saber mais sobre nossa política de descontos. 💰{os.linesep}
@@ -122,7 +127,7 @@ Gostaria de <em>agendar</em> um teste de nivelamento? Digite <b>'agendamento'</b
 - 🟡 Nível Intermediário | 35% de desconto na mensalidade.{os.linesep}
 - 🔴 Nível Avançado | 50% de desconto na mensalidade.{os.linesep}''', botoes, None
 
-        if mensagem == '3':
+        if mensagem == '3': # Informações sobre intercâmbio
             return f'''Temos parcerias com escolas na <em>Alemanha</em> e na <em>Suiça</em> para intercâmbio.{os.linesep}
 Para receber mais informações sobre os destinos, o tempo de duração do programa e preços, escolha um dos destinos de interesse: {os.linesep}
 - Digite "Berlim" para receber informações sobre o intercâmbio em Berlim. 🧱{os.linesep}
@@ -167,7 +172,7 @@ A Suíça é o destino perfeito para quem busca um aprendizado imersivo e uma qu
 ✅ Passe gratuito para transporte público durante toda a estadia
 ✅ Visitas culturais ao Lago de Zurique, ao Museu Nacional Suíço e ao bairro medieval Niederdorf''', botoes, IMAGENS["zurique"]
 
-        if mensagem == '4' or mensagem.lower() == 'agendamento':
+        if mensagem == '4' or mensagem.lower() == 'agendamento': # Funcionalidade de agendamento automático
             resposta = '''Você pode agendar uma aula experimental ou seu teste de nivelamento e atendimentos personalizados pelo nosso site ou WhatsApp.  
 Escolha uma das opções abaixo:'''
 
@@ -182,6 +187,7 @@ Escolha uma das opções abaixo:'''
         
         return "Desculpe, não entendi. Digite 'voltar' para voltar ao menu principal e ver as opções.", botoes, imagem
 
+    # Processa interações do usuário com botões inline do Telegram.
     def processar_callback(self, callback_query):
         chat_id = callback_query["message"]["chat"]["id"]
         dados = callback_query["data"]
@@ -190,11 +196,12 @@ Escolha uma das opções abaixo:'''
             self.passos_agendamento[chat_id] = {"passo": 1, "tipo": dados}
             self.responder("Ótimo! Digite a data desejada no formato DD/MM/AAAA.", chat_id)
 
+    # Aqui está a lógica por trás do agendamento
     def processar_agendamento(self, chat_id, mensagem):
         dados_agendamento = self.passos_agendamento[chat_id]
         passo = dados_agendamento["passo"]
 
-        if passo == 1:
+        if passo == 1: # Pede ao usuário uma data
             try:
                 data = datetime.strptime(mensagem, "%d/%m/%Y").date()
                 self.passos_agendamento[chat_id]["data"] = str(data)
@@ -203,13 +210,12 @@ Escolha uma das opções abaixo:'''
             except ValueError:
                 return "Formato de data inválido! Use DD/MM/AAAA.", None, None
 
-        elif passo == 2:
+        elif passo == 2: # Pede ao usuário um horário e seu nome
             try:
                 hora = datetime.strptime(mensagem, "%H:%M").time()
                 data = self.passos_agendamento[chat_id]["data"]
 
-                # Verificar se o horário já está ocupado
-                for agendamento in self.agendamentos:
+                for agendamento in self.agendamentos: # Verificar se o horário já está ocupado
                     if agendamento["data"] == data and agendamento["hora"] == str(hora):
                         return f"Desculpe, o horário {hora} do dia {data} já está ocupado. Escolha outro horário.", None, None
 
@@ -219,12 +225,12 @@ Escolha uma das opções abaixo:'''
             except ValueError:
                 return "Formato de hora inválido! Use HH:MM.", None, None
 
-        elif passo == 3:
+        elif passo == 3: # Pede ao usuário seu número de telefone
             self.passos_agendamento[chat_id]["nome"] = mensagem
             self.passos_agendamento[chat_id]["passo"] = 4
             return "Por fim, envie seu número de telefone.", None, None
 
-        elif passo == 4:
+        elif passo == 4: # Etapa de armazenamento do agendamento no arquivo e confirmação ao usuário
             self.passos_agendamento[chat_id]["numero"] = mensagem
             tipo = "Aula Experimental" if self.passos_agendamento[chat_id]["tipo"] == "agendar_aula" else "Teste de Nivelamento"
 
@@ -242,7 +248,7 @@ Escolha uma das opções abaixo:'''
             del self.passos_agendamento[chat_id]
             return f"Seu {tipo} foi agendado para {novo_agendamento['data']} às {novo_agendamento['hora']}!", None, None
        
-
+    # Fornece a resposta ao usuário
     def responder(self, resposta, chat_id, botoes=None, imagem=None):
         params = {"chat_id": chat_id, "text": resposta, "parse_mode": "HTML"}
         if botoes:
