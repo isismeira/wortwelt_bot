@@ -2,6 +2,7 @@
 
 Um bot para telegram voltado para o **atendimento rápido e automatizado** de clientes de uma escola de idiomas. O bot, além de **fornecer informações de forma interativa** sobre preços, turmas, intercâmbio e bolsas , **realiza agendamento inteligente** de testes de nivelamento e aulas experimentais. Sinta-se livre para se basear no *WortWelt Bot* para **automatizar o atendimento do seu negócio!**
 
+<img src="wortweltbot.gif">
 
 ##  🚀 Tecnologias utilizadas
 
